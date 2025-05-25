@@ -153,8 +153,8 @@
         
         // --- Utility Functions (including Black-Scholes) ---
         const utils = {
-            formatCurrency: (value) => value !== undefined && value !== null ? ₹${Number(value).toFixed(2)} : 'N/A',
-            formatPercentage: (value) => value !== undefined && value !== null ? ${(Number(value) * 100).toFixed(2)}% : 'N/A',
+            formatCurrency: (value) => value !== undefined && value !== null ? `₹${Number(value).toFixed(2)}` : 'N/A',
+            formatPercentage: (value) => value !== undefined && value !== null ? (Number(value) * 100).toFixed(2) + '%' : 'N/A',
             getLotSize: (stockCode) => FNOMASTER[stockCode] || 1,
 
             // Black-Scholes Model functions
@@ -273,7 +273,7 @@
                 document.getElementById('pageTitle').textContent = page.charAt(0).toUpperCase() + page.slice(1).replace(/([A-Z])/g, ' $1').trim();
                 
                 document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-                document.querySelector(.nav-item[data-page="${page}"]).classList.add('active');
+                document.querySelector(`.nav-item[data-page="${page}"]`).classList.add('active');
                 
                 app.renderCurrentPage();
             },
@@ -287,7 +287,7 @@
                 switch (app.currentPage) {
                     case 'dashboard':
                         introText = "Welcome to your Options Trading Toolkit. This dashboard provides a high-level overview of your activities and market status. (Content Placeholder)";
-                        mainContent.innerHTML = <div class="bg-white p-6 rounded-lg shadow">${introText}</div>;
+                        mainContent.innerHTML = `<div class="bg-white p-6 rounded-lg shadow">${introText}</div>`;
                         break;
                     case 'marketIntel':
                         introText = "Access real-time market intelligence. Look up spot prices for specific stocks. (Spot price functionality is mocked).";
@@ -318,7 +318,7 @@
                         app.renderSettings(mainContent, introText);
                         break;
                     default:
-                        mainContent.innerHTML = <div class="bg-white p-6 rounded-lg shadow">Page not found.</div>;
+                        mainContent.innerHTML = `<div class="bg-white p-6 rounded-lg shadow">Page not found.</div>`;
                 }
             },
 
@@ -328,7 +328,7 @@
                         <p class="text-sm text-slate-600 mb-4">${intro}</p>
                         <h3 class="text-lg font-semibold text-slate-700">Spot Price Lookup</h3>
                         <div class="flex space-x-2">
-                            <input type="text" id="spotStockCode" placeholder="Enter Stock Code (e.g., NIFTY)" class="flex-grow p-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500">
+                            <input type="text" id="spotStockCode" placeholder="Enter Stock Code (e.g., NIFTY)" class="flex-grow p-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500" />
                             <button id="fetchSpotPriceBtn" class="bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700">Fetch Price</button>
                         </div>
                         <div id="spotPriceResult" class="mt-2 text-slate-700 font-medium"></div>
@@ -346,7 +346,7 @@
                     await new Promise(resolve => setTimeout(resolve, 500)); 
                     const spot = MOCK_OPTION_CHAIN[stockCode]?.spot_price || Math.floor(Math.random() * (5000 - 100 + 1)) + 100; // Mock price
                     app.spotPricesCache[stockCode] = spot;
-                    resultDiv.textContent = ${stockCode} Spot Price: ${utils.formatCurrency(spot)};
+                    resultDiv.textContent = `${stockCode} Spot Price: ${utils.formatCurrency(spot)}`;
                 });
             },
 
@@ -375,7 +375,7 @@
             },
 
             renderPortfolio: (container, intro) => {
-                let tableHTML = 
+                let tableHTML = `
                     <div class="bg-white p-6 rounded-lg shadow">
                         <p class="text-sm text-slate-600 mb-4">${intro}</p>
                         <h3 class="text-lg font-semibold text-slate-700 mb-4">F&O Positions</h3>
@@ -394,10 +394,11 @@
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-slate-200">
-                                    </tbody>
+                                </tbody>
                             </table>
                         </div>
-                    </div>;
+                    </div>
+                `;
                 container.innerHTML = tableHTML;
                 app.populateFnoPositionsTable(app.fnoPositionsData);
             },
@@ -435,7 +436,7 @@
                 sortedData.forEach(p => {
                     const row = tbody.insertRow();
                     row.innerHTML = 
-                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${p.stock_code}</td>
+                       ` <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${p.stock_code}</td>
                         <td class="px-3 py-3 whitespace-nowrap text-xs ${p.right === 'Call' ? 'text-green-600' : 'text-red-600'}">${p.right}</td>
                         <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(p.strike_price)}</td>
                         <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${p.quantity}</td>
@@ -446,7 +447,7 @@
                         <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(p.distance)}</td>
                         <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(p.iv)}</td>
                         <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${Number(p.delta).toFixed(2)}</td>
-                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(p.probOTM)}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(p.probOTM)}</td>`
                     ;
                 });
 
@@ -464,7 +465,7 @@
             currentSortAsc: true,
             
             renderOptionChain: (container, intro) => {
-                container.innerHTML = 
+                container.innerHTML = `
                     <div class="bg-white p-6 rounded-lg shadow space-y-6">
                         <p class="text-sm text-slate-600 mb-4">${intro}</p>
                         <h3 class="text-lg font-semibold text-slate-700">Option Chain Viewer</h3>
@@ -484,7 +485,7 @@
                                 <div class="overflow-x-auto"><table id="putsTable" class="min-w-full divide-y divide-slate-200 table-fixed-layout"></table></div>
                             </div>
                         </div>
-                    </div>
+                    </div>`
                 ;
                 document.getElementById('fetchOptionChainBtn').addEventListener('click', app.displayOptionChain);
             },
@@ -505,15 +506,15 @@
                 const chain = MOCK_OPTION_CHAIN[stockCode];
 
                 if (!chain || chain.expiry.substring(0,10) !== expiry.substring(0,10)) { // Check if expiry matches
-                    spotPriceDiv.textContent = No option chain data found for ${stockCode} and expiry ${expiry.substring(0,10)}. Using NIFTY example.;
+                    spotPriceDiv.textContent = `No option chain data found for ${stockCode} and expiry ${expiry.substring(0,10)}. Using NIFTY example.;
                     // Fallback to NIFTY example if specific stock/expiry not found or doesn't match
                      app.populateOptionTable('callsTable', MOCK_OPTION_CHAIN.NIFTY.calls, MOCK_OPTION_CHAIN.NIFTY.spot_price, expiry, 'Call');
                      app.populateOptionTable('putsTable', MOCK_OPTION_CHAIN.NIFTY.puts, MOCK_OPTION_CHAIN.NIFTY.spot_price, expiry, 'Put');
-                     spotPriceDiv.innerHTML += <br>Spot Price: ${utils.formatCurrency(MOCK_OPTION_CHAIN.NIFTY.spot_price)};
+                     spotPriceDiv.innerHTML += <br>Spot Price: ${utils.formatCurrency(MOCK_OPTION_CHAIN.NIFTY.spot_price)}`;
                     return;
                 }
                 
-                spotPriceDiv.textContent = Spot Price for ${stockCode}: ${utils.formatCurrency(chain.spot_price)};
+                spotPriceDiv.textContent = `Spot Price for ${stockCode}: ${utils.formatCurrency(chain.spot_price)}`;
                 app.populateOptionTable('callsTable', chain.calls, chain.spot_price, expiry, 'Call');
                 app.populateOptionTable('putsTable', chain.puts, chain.spot_price, expiry, 'Put');
             },
@@ -521,7 +522,7 @@
             populateOptionTable: (tableId, data, spotPrice, expiry, optionType) => {
                 const table = document.getElementById(tableId);
                 if (!table) return;
-                table.innerHTML = 
+                table.innerHTML = `
                     <thead class="bg-slate-100">
                         <tr>
                             <th class="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase">OI</th>
@@ -549,7 +550,7 @@
                             </tr>
                         ;
                     }).join('')}
-                    </tbody>
+                    </tbody>`
                 ;
             },
             
@@ -600,7 +601,7 @@
                 positionsToDisplay.forEach((p, index) => {
                     const lots = p.quantity / p.lot_size;
                     const row = tbody.insertRow();
-                    row.innerHTML = 
+                    row.innerHTML = `
                         <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${p.stock_code}</td>
                         <td class="px-3 py-3 whitespace-nowrap text-xs ${p.right === 'Call' ? 'text-green-600' : 'text-red-600'}">${p.right}</td>
                         <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(p.strike_price)}</td>
@@ -610,7 +611,7 @@
                         <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${lots.toFixed(0)}</td>
                         <td class="px-3 py-3 whitespace-nowrap text-xs">
                             ${lots > 0 ? <button data-index="${app.fnoPositionsData.indexOf(p)}" class="sq-off-one-lot-btn bg-amber-500 text-white px-2 py-1 rounded-md text-xs hover:bg-amber-600">Sq.Off 1 Lot</button> : 'All Squared'}
-                        </td>
+                        </td>`
                     ;
                 });
                 document.querySelectorAll('.sq-off-one-lot-btn').forEach(btn => {
@@ -629,7 +630,7 @@
                     return;
                 }
 
-                messageDiv.textContent = Simulating square off for 1 lot of ${position.stock_code} ${position.strike_price} ${position.right}...;
+                messageDiv.textContent = `Simulating square off for 1 lot of ${position.stock_code} ${position.strike_price} ${position.right}...`;
                 messageDiv.className = 'mt-4 text-sm text-sky-600';
 
                 // Simulate API Call
@@ -639,10 +640,10 @@
 
                 if (success) {
                     position.quantity -= position.lot_size;
-                     messageDiv.textContent = Successfully squared off 1 lot of ${position.stock_code} ${position.strike_price} ${position.right}. Remaining Qty: ${position.quantity};
+                     messageDiv.textContent = `Successfully squared off 1 lot of ${position.stock_code} ${position.strike_price} ${position.right}. Remaining Qty: ${position.quantity}`;
                     messageDiv.className = 'mt-4 text-sm text-green-600';
                 } else {
-                    messageDiv.textContent = Failed to square off 1 lot of ${position.stock_code} ${position.strike_price} ${position.right}. (Simulated error);
+                    messageDiv.textContent = `Failed to square off 1 lot of ${position.stock_code} ${position.strike_price} ${position.right}. (Simulated error)`;
                     messageDiv.className = 'mt-4 text-sm text-red-600';
                 }
                 app.populateSquareOffTable(); // Refresh table
@@ -657,19 +658,19 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div>
                                 <label for="tsMinPremium" class="block text-sm font-medium text-slate-700">Min Premium</label>
-                                <input type="number" id="tsMinPremium" value="1000" class="mt-1 w-full p-2 border border-slate-300 rounded-md">
+                                <input type="number" id="tsMinPremium" value="1000" class="mt-1 w-full p-2 border border-slate-300 rounded-md"/>
                             </div>
                             <div>
                                 <label for="tsMaxPremium" class="block text-sm font-medium text-slate-700">Max Premium</label>
-                                <input type="number" id="tsMaxPremium" value="10000" class="mt-1 w-full p-2 border border-slate-300 rounded-md">
+                                <input type="number" id="tsMaxPremium" value="10000" class="mt-1 w-full p-2 border border-slate-300 rounded-md"/>
                             </div>
                             <div>
                                 <label for="tsMinDistance" class="block text-sm font-medium text-slate-700">Min Distance % (e.g., 0.15 for 15%)</label>
-                                <input type="number" step="0.01" id="tsMinDistance" value="0.15" class="mt-1 w-full p-2 border border-slate-300 rounded-md">
+                                <input type="number" step="0.01" id="tsMinDistance" value="0.15" class="mt-1 w-full p-2 border border-slate-300 rounded-md"/>
                             </div>
                             <div>
                                 <label for="tsMaxDistance" class="block text-sm font-medium text-slate-700">Max Distance % (e.g., 0.5 for 50%)</label>
-                                <input type="number" step="0.01" id="tsMaxDistance" value="0.50" class="mt-1 w-full p-2 border border-slate-300 rounded-md">
+                                <input type="number" step="0.01" id="tsMaxDistance" value="0.50" class="mt-1 w-full p-2 border border-slate-300 rounded-md"/>
                             </div>
                         </div>
                         <button id="runTradeScannerBtn" class="bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700">Scan Options</button>
@@ -725,36 +726,37 @@
                 }
 
                 resultsDiv.innerHTML = 
-                    <h4 class="text-md font-semibold text-slate-700 mb-2">Scan Results (${scannedOptions.length} found)</h4>
-                    <table class="min-w-full divide-y divide-slate-200 table-fixed-layout">
-                        <thead class="bg-slate-100">
-                            <tr>
-                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Stock</th>
-                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Type</th>
-                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Strike</th>
-                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">LTP</th>
-                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Premium</th>
-                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Dist %</th>
-                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">IV %</th>
-                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Prob. OTM %</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-slate-200">
-                        ${scannedOptions.map(opt => 
-                            <tr>
-                                <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${opt.stock_code}</td>
-                                <td class="px-3 py-3 whitespace-nowrap text-xs ${opt.right === 'Call' ? 'text-green-600' : 'text-red-600'}">${opt.right}</td>
-                                <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(opt.strike_price)}</td>
-                                <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(opt.ltp)}</td>
-                                <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(opt.premium)}</td>
-                                <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(opt.distance)}</td>
-                                <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(opt.iv)}</td>
-                                <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(opt.probOTM)}</td>
-                            </tr>
-                        ).join('')}
-                        </tbody>
-                    </table>
-                ;
+                    `<div>
+                        <h4 class="text-md font-semibold text-slate-700 mb-2">Scan Results (${scannedOptions.length} found)</h4>
+                        <table class="min-w-full divide-y divide-slate-200 table-fixed-layout">
+                            <thead class="bg-slate-100">
+                                <tr>
+                                    <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Stock</th>
+                                    <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Type</th>
+                                    <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Strike</th>
+                                    <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">LTP</th>
+                                    <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Premium</th>
+                                    <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Dist %</th>
+                                    <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">IV %</th>
+                                    <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Prob. OTM %</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-slate-200">
+                            ${scannedOptions.map(opt => 
+                                `<tr>
+                                    <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${opt.stock_code}</td>
+                                    <td class="px-3 py-3 whitespace-nowrap text-xs ${opt.right === 'Call' ? 'text-green-600' : 'text-red-600'}">${opt.right}</td>
+                                    <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(opt.strike_price)}</td>
+                                    <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(opt.ltp)}</td>
+                                    <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(opt.premium)}</td>
+                                    <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(opt.distance)}</td>
+                                    <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(opt.iv)}</td>
+                                    <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(opt.probOTM)}</td>
+                                </tr>`
+                            ).join('')}
+                            </tbody>
+                        </table>
+                    </div>`;
             },
             
             renderPnlChart: (container, intro) => {
@@ -773,7 +775,7 @@
                 
                 const ctx = document.getElementById('pnlDistributionChart').getContext('2d');
                 const pnlData = app.fnoPositionsData.map(p => p.pnl);
-                const labels = app.fnoPositionsData.map(p => ${p.stock_code} ${p.strike_price}${p.right[0]});
+                const labels = app.fnoPositionsData.map(p => `${p.stock_code} ${p.strike_price}${p.right[0]}`);
 
                 app.pnlChartInstance = new Chart(ctx, {
                     type: 'bar',
@@ -824,7 +826,7 @@
                                 bodyFont: { size: 12 },
                                 callbacks: {
                                     label: function(context) {
-                                        return P&L: ${utils.formatCurrency(context.raw)};
+                                        return `P&L: ${utils.formatCurrency(context.raw)}`;
                                     }
                                 }
                             }
@@ -844,7 +846,7 @@
                         <div>
                             <label for="expirySelect" class="block text-sm font-medium text-slate-700">Select Active Expiry Date:</label>
                             <select id="expirySelect" class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm">
-                                ${expiries.map(exp => <option value="${exp}" ${exp === CURRENT_EXPIRY ? 'selected' : ''}>${exp.substring(0,10)}</option>).join('')}
+                                ${expiries.map(exp => `<option value="${exp}" ${exp === CURRENT_EXPIRY ? 'selected' : ''}>${exp.substring(0,10)}</option>`).join('')}
                             </select>
                         </div>
                         <button id="saveSettingsBtn" class="bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700">Save Settings</button>
