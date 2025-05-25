@@ -1,0 +1,869 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Options Trading Toolkit</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Application Structure Plan: 
+        The SPA uses a header, a collapsible sidebar for navigation, and a main content area.
+        Sections are designed to mirror the core functionalities of the notebook:
+        1. Dashboard: A placeholder for overall summaries.
+        2. Market Intel: Quick spot price lookup.
+        3. Portfolio: Detailed F&O Positions view with calculated greeks and P&L.
+        4. Option Chain: Standard tool for analyzing calls and puts for a selected stock and expiry.
+        5. Square Off Tool: Interactive selection of F&O positions for simulated square-off (based on "Square Off Lots" logic).
+        6. Trade Scanner: Finds options based on user-defined distance and premium criteria (based on "Distance Recommendations [F]" / FP2 logic).
+        7. Settings: Allows selection of the global expiry date.
+        This structure was chosen to provide a clear, task-oriented navigation for the user, making it easy to access different tools and analyses derived from the notebook's capabilities. It prioritizes usability and logical grouping of related functionalities.
+    -->
+    <!-- Visualization & Content Choices:
+        - F&O Positions: Interactive HTML table. Report Info: fetch_fno_positions_df. Goal: Inform/Track. Interaction: Sortable columns. Justification: Core portfolio view. Library: HTML+JS.
+        - Option Chain: Two-sided HTML table for Calls/Puts. Report Info: get_call_put_option_chain, Black-Scholes. Goal: Analyze. Interaction: Select stock/expiry. Justification: Standard options analysis. Library: HTML+JS.
+        - Trade Scanner Results: HTML table. Report Info: FP2 logic. Goal: Discover. Interaction: View filtered results. Justification: Screened trade ideas. Library: HTML+JS.
+        - P&L Distribution Chart: Bar chart for F&O P&L. Report Info: gainloss from F&O positions. Goal: Summarize. Interaction: Tooltips. Justification: Visual P&L summary. Library: Chart.js.
+        - All tables are sortable. Calculations like IV, Delta, Prob OTM are performed in JS.
+        - Chart.js used with maintainAspectRatio: false. Chart containers are styled for responsiveness.
+    -->
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .sidebar { transition: transform 0.3s ease-in-out; }
+        .main-content { transition: margin-left 0.3s ease-in-out; }
+        .sidebar-closed { transform: translateX(-100%); }
+        .main-content-expanded { margin-left: 0 !important; }
+        .nav-item { cursor: pointer; }
+        .nav-item.active { background-color: #0284c7; color: white; } /* sky-600 */
+        .nav-item:hover { background-color: #e0f2fe; color: #0c4a6e; } /* sky-100, sky-800 */
+        .table-fixed-layout { table-layout: fixed; width: 100%; }
+        .table-fixed-layout th, .table-fixed-layout td { overflow-wrap: break-word; word-wrap: break-word; }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px; /* Adjusted for potentially wider charts */
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px; /* Base height */
+            max-height: 450px;
+        }
+        @media (min-width: 768px) {
+            .chart-container { height: 400px; }
+        }
+        /* Custom scrollbar for better aesthetics if needed */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; } /* slate-100 */
+        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; } /* slate-400 */
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; } /* slate-500 */
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-700">
+    <div class="flex h-screen overflow-hidden">
+        <aside id="sidebar" class="sidebar fixed inset-y-0 left-0 z-30 w-64 bg-white shadow-lg p-4 space-y-2 overflow-y-auto">
+            <h1 class="text-2xl font-bold text-sky-700 mb-6">Options Toolkit</h1>
+            <nav>
+                <a data-page="dashboard" class="nav-item active group flex items-center px-3 py-2.5 text-sm font-medium rounded-md">
+                    <svg class="w-5 h-5 mr-3 text-slate-500 group-hover:text-sky-700 group-[.active]:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                    Dashboard
+                </a>
+                <a data-page="marketIntel" class="nav-item group flex items-center px-3 py-2.5 text-sm font-medium rounded-md">
+                    <svg class="w-5 h-5 mr-3 text-slate-500 group-hover:text-sky-700 group-[.active]:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                    Market Intel
+                </a>
+                <a data-page="portfolio" class="nav-item group flex items-center px-3 py-2.5 text-sm font-medium rounded-md">
+                     <svg class="w-5 h-5 mr-3 text-slate-500 group-hover:text-sky-700 group-[.active]:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                    Portfolio
+                </a>
+                <a data-page="optionChain" class="nav-item group flex items-center px-3 py-2.5 text-sm font-medium rounded-md">
+                    <svg class="w-5 h-5 mr-3 text-slate-500 group-hover:text-sky-700 group-[.active]:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
+                    Option Chain
+                </a>
+                <a data-page="squareOff" class="nav-item group flex items-center px-3 py-2.5 text-sm font-medium rounded-md">
+                    <svg class="w-5 h-5 mr-3 text-slate-500 group-hover:text-sky-700 group-[.active]:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    Square Off
+                </a>
+                <a data-page="tradeScanner" class="nav-item group flex items-center px-3 py-2.5 text-sm font-medium rounded-md">
+                    <svg class="w-5 h-5 mr-3 text-slate-500 group-hover:text-sky-700 group-[.active]:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    Trade Scanner
+                </a>
+                 <a data-page="pnlChart" class="nav-item group flex items-center px-3 py-2.5 text-sm font-medium rounded-md">
+                    <svg class="w-5 h-5 mr-3 text-slate-500 group-hover:text-sky-700 group-[.active]:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path></svg>
+                    P&L Chart
+                </a>
+                <a data-page="settings" class="nav-item group flex items-center px-3 py-2.5 text-sm font-medium rounded-md">
+                    <svg class="w-5 h-5 mr-3 text-slate-500 group-hover:text-sky-700 group-[.active]:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    Settings
+                </a>
+            </nav>
+        </aside>
+
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="bg-white shadow-sm">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                    <button id="sidebarToggle" class="text-slate-500 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-sky-500">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    </button>
+                    <h2 id="pageTitle" class="text-xl font-semibold text-slate-800">Dashboard</h2>
+                    <div></div>
+                </div>
+            </header>
+
+            <main id="mainContent" class="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 p-6">
+                </main>
+        </div>
+    </div>
+
+    <script>
+        // --- Constants and Global Data ---
+        const API_BASE_URL = '/api'; // Placeholder for actual API
+        const FNOMASTER = { // Subset for example
+            "NIFTY": 50, "BANKNIFTY": 15, "RELIANCE": 250, "INFY": 250, "HDFCBANK": 550, "ICICIBANK": 700, "TCS": 175, "SBIN": 1500, "KOTAKBANK": 400, "AXISBANK": 625, "LT":150, "ITC":1600
+        };
+        const TODAY_DATE_API = new Date().toISOString().split('T')[0] + "T15:30:00.000Z";
+        const RISK_FREE_RATE = 0.06; // 6%
+        let CURRENT_EXPIRY = "2025-05-29T15:30:00.000Z"; // Default, can be changed in settings
+
+        // --- Mock Data ---
+        const MOCK_FNO_POSITIONS = [
+            { stock_code: 'NIFTY', right: 'Call', strike_price: 22500, quantity: 50, average_price: 120.50, ltp: 150.75, spot_price: 22600.00 },
+            { stock_code: 'NIFTY', right: 'Put', strike_price: 22000, quantity: 100, average_price: 85.20, ltp: 60.50, spot_price: 22600.00 },
+            { stock_code: 'BANKNIFTY', right: 'Call', strike_price: 48000, quantity: 15, average_price: 250.00, ltp: 310.00, spot_price: 48250.00 },
+            { stock_code: 'RELIANCE', right: 'Put', strike_price: 2800, quantity: 250, average_price: 45.60, ltp: 30.20, spot_price: 2850.50 },
+            { stock_code: 'INFY', right: 'Call', strike_price: 1500, quantity: 250, average_price: 30.10, ltp: 45.80, spot_price: 1520.00 },
+        ];
+
+        const MOCK_OPTION_CHAIN = {
+            NIFTY: {
+                expiry: "2025-05-29T15:30:00.000Z",
+                spot_price: 22600.00,
+                calls: [
+                    { strike_price: 22400, ltp: 280.5, best_bid_price: 279.0, best_offer_price: 281.0, open_interest: 120000, iv: 0.15, delta: 0.65, theta: -5.2, vega: 12.1, gamma: 0.003 },
+                    { strike_price: 22500, ltp: 210.0, best_bid_price: 209.5, best_offer_price: 210.5, open_interest: 150000, iv: 0.145, delta: 0.58, theta: -5.0, vega: 13.5, gamma: 0.0035 },
+                    { strike_price: 22600, ltp: 150.75, best_bid_price: 150.0, best_offer_price: 151.0, open_interest: 180000, iv: 0.14, delta: 0.50, theta: -4.8, vega: 14.0, gamma: 0.004 },
+                    { strike_price: 22700, ltp: 105.2, best_bid_price: 104.5, best_offer_price: 105.5, open_interest: 160000, iv: 0.138, delta: 0.42, theta: -4.5, vega: 13.8, gamma: 0.0038 },
+                    { strike_price: 22800, ltp: 70.8, best_bid_price: 70.0, best_offer_price: 71.0, open_interest: 130000, iv: 0.135, delta: 0.35, theta: -4.2, vega: 13.0, gamma: 0.0032 },
+                ],
+                puts: [
+                    { strike_price: 22800, ltp: 260.0, best_bid_price: 259.0, best_offer_price: 261.0, open_interest: 90000, iv: 0.16, delta: -0.60, theta: -5.5, vega: 11.5, gamma: 0.0028 },
+                    { strike_price: 22700, ltp: 200.5, best_bid_price: 200.0, best_offer_price: 201.0, open_interest: 110000, iv: 0.155, delta: -0.53, theta: -5.3, vega: 12.8, gamma: 0.0033 },
+                    { strike_price: 22600, ltp: 155.0, best_bid_price: 154.5, best_offer_price: 155.5, open_interest: 140000, iv: 0.15, delta: -0.48, theta: -5.1, vega: 13.9, gamma: 0.0039 },
+                    { strike_price: 22500, ltp: 110.0, best_bid_price: 109.5, best_offer_price: 110.5, open_interest: 170000, iv: 0.148, delta: -0.40, theta: -4.7, vega: 13.7, gamma: 0.0037 },
+                    { strike_price: 22400, ltp: 75.3, best_bid_price: 75.0, best_offer_price: 75.8, open_interest: 145000, iv: 0.146, delta: -0.33, theta: -4.3, vega: 13.2, gamma: 0.0031 },
+                ]
+            }
+        };
+        
+        // --- Utility Functions (including Black-Scholes) ---
+        const utils = {
+            formatCurrency: (value) => value !== undefined && value !== null ? ₹${Number(value).toFixed(2)} : 'N/A',
+            formatPercentage: (value) => value !== undefined && value !== null ? ${(Number(value) * 100).toFixed(2)}% : 'N/A',
+            getLotSize: (stockCode) => FNOMASTER[stockCode] || 1,
+
+            // Black-Scholes Model functions
+            normDist: (x) => { // Cumulative standard normal distribution
+                const t = 1 / (1 + 0.2316419 * Math.abs(x));
+                const d = 0.3989423 * Math.exp(-x * x / 2);
+                let prob = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+                if (x > 0) prob = 1 - prob;
+                return prob;
+            },
+            normPdf: (x) => { // Standard normal probability density function
+                 return (1 / Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * x * x);
+            },
+            blackScholes: (S, K, T_days, r, sigma, optionType) => {
+                if (S <= 0 || K <= 0 || T_days <= 0 || sigma <= 0) return 0;
+                const T = T_days / 252; // Assuming 252 trading days
+                const d1 = (Math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
+                const d2 = d1 - sigma * Math.sqrt(T);
+
+                if (optionType.toLowerCase() === 'call') {
+                    return S * utils.normDist(d1) - K * Math.exp(-r * T) * utils.normDist(d2);
+                } else if (optionType.toLowerCase() === 'put') {
+                    return K * Math.exp(-r * T) * utils.normDist(-d2) - S * utils.normDist(-d1);
+                }
+                return 0;
+            },
+            impliedVolatility: (S, K, T_days, r, marketPrice, optionType, maxIter = 100, tol = 1e-5) => {
+                if (marketPrice <=0) return 0.2; // Return a default if market price is non-positive
+                let sigma = 0.2; // Initial guess
+                for (let i = 0; i < maxIter; i++) {
+                    const price = utils.blackScholes(S, K, T_days, r, sigma, optionType);
+                    const T_years = T_days / 252;
+                    const d1 = (Math.log(S / K) + (r + 0.5 * sigma * sigma) * T_years) / (sigma * Math.sqrt(T_years));
+                    if (sigma === 0 || T_years === 0) return 0.2; // Avoid division by zero
+                    const vega = S * utils.normPdf(d1) * Math.sqrt(T_years);
+                    if (vega < 1e-8) break; // Vega too small, stop iteration
+                    
+                    const diff = price - marketPrice;
+                    if (Math.abs(diff) < tol) return sigma;
+                    sigma -= diff / vega;
+                    sigma = Math.max(1e-4, Math.min(sigma, 5)); // Clamp sigma
+                }
+                return sigma; // Return best guess if not converged
+            },
+            calculateDelta: (S, K, T_days, r, sigma, optionType) => {
+                if (S <= 0 || K <= 0 || T_days <= 0 || sigma <= 0) return 0;
+                const T = T_days / 252;
+                const d1 = (Math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
+                if (optionType.toLowerCase() === 'call') {
+                    return utils.normDist(d1);
+                } else if (optionType.toLowerCase() === 'put') {
+                    return utils.normDist(d1) - 1;
+                }
+                return 0;
+            },
+            calculateProbOTM: (S, K, T_days, r, sigma, optionType) => {
+                if (S <= 0 || K <= 0 || T_days <= 0 || sigma <= 0) return 0.5;
+                const T = T_days / 252;
+                const d2 = (Math.log(S / K) + (r - 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
+                if (optionType.toLowerCase() === 'call') {
+                    return 1 - utils.normDist(d2); // N(-d2)
+                } else if (optionType.toLowerCase() === 'put') {
+                    return utils.normDist(-d2); // N(d2)
+                }
+                return 0.5;
+            },
+            businessDaysUntil: (expiryDateStr) => {
+                const targetDate = new Date(expiryDateStr.substring(0,10)); // Use only date part for comparison
+                const today = new Date();
+                today.setHours(0,0,0,0); // Normalize today to start of day
+
+                let businessDays = 0;
+                let currentDay = new Date(today);
+
+                if (targetDate <= today) return 1; // If expiry is today or past, assume 1 day for calc
+
+                while(currentDay < targetDate) {
+                    const dayOfWeek = currentDay.getDay();
+                    if (dayOfWeek !== 0 && dayOfWeek !== 6) { // 0 = Sunday, 6 = Saturday
+                        businessDays++;
+                    }
+                    currentDay.setDate(currentDay.getDate() + 1);
+                }
+                return Math.max(1, businessDays); // Ensure at least 1 day
+            }
+        };
+
+        // --- App Object ---
+        const app = {
+            currentPage: 'dashboard',
+            fnoPositionsData: [],
+            pnlChartInstance: null,
+
+            init: () => {
+                app.navigateTo('dashboard');
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const page = e.currentTarget.dataset.page;
+                        app.navigateTo(page);
+                    });
+                });
+                document.getElementById('sidebarToggle').addEventListener('click', () => {
+                    document.getElementById('sidebar').classList.toggle('sidebar-closed');
+                    document.querySelector('.flex-1.flex.flex-col.overflow-hidden').classList.toggle('md:ml-64');
+                });
+                // Adjust main content margin initially if sidebar is open
+                if (!document.getElementById('sidebar').classList.contains('sidebar-closed')) {
+                     document.querySelector('.flex-1.flex.flex-col.overflow-hidden').classList.add('md:ml-64');
+                }
+                 app.loadFnoPositions(); // Load initial data
+            },
+
+            navigateTo: (page) => {
+                app.currentPage = page;
+                document.getElementById('pageTitle').textContent = page.charAt(0).toUpperCase() + page.slice(1).replace(/([A-Z])/g, ' $1').trim();
+                
+                document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+                document.querySelector(.nav-item[data-page="${page}"]).classList.add('active');
+                
+                app.renderCurrentPage();
+            },
+            
+            renderCurrentPage: () => {
+                const mainContent = document.getElementById('mainContent');
+                mainContent.innerHTML = ''; // Clear previous content
+
+                // Add a general introductory paragraph for each section
+                let introText = "";
+                switch (app.currentPage) {
+                    case 'dashboard':
+                        introText = "Welcome to your Options Trading Toolkit. This dashboard provides a high-level overview of your activities and market status. (Content Placeholder)";
+                        mainContent.innerHTML = <div class="bg-white p-6 rounded-lg shadow">${introText}</div>;
+                        break;
+                    case 'marketIntel':
+                        introText = "Access real-time market intelligence. Look up spot prices for specific stocks. (Spot price functionality is mocked).";
+                        app.renderMarketIntel(mainContent, introText);
+                        break;
+                    case 'portfolio':
+                        introText = "View your current F&O positions, including calculated metrics like P&L, Implied Volatility, Delta, and Probability OTM. Data is sortable by clicking column headers.";
+                        app.renderPortfolio(mainContent, introText);
+                        break;
+                    case 'optionChain':
+                        introText = "Analyze option chains for specific stocks and expiries. View call and put details including LTP, OI, IV, and Greeks. (IV and Greeks are calculated dynamically if not provided in mock data).";
+                        app.renderOptionChain(mainContent, introText);
+                        break;
+                    case 'squareOff':
+                        introText = "Interactively select F&O positions to square off. This tool simulates the 'Square Off Lots' functionality from the notebook, allowing lot-by-lot square off.";
+                        app.renderSquareOff(mainContent, introText);
+                        break;
+                    case 'tradeScanner':
+                        introText = "Scan for potential option selling opportunities based on your criteria for premium and distance from spot. This is based on the 'Distance Recommendations [F]' logic.";
+                        app.renderTradeScanner(mainContent, introText);
+                        break;
+                    case 'pnlChart':
+                        introText = "Visualize the Profit & Loss distribution of your current F&O positions. This helps in understanding the overall risk and reward profile.";
+                        app.renderPnlChart(mainContent, introText);
+                        break;
+                    case 'settings':
+                        introText = "Configure application settings, such as the currently active options expiry date.";
+                        app.renderSettings(mainContent, introText);
+                        break;
+                    default:
+                        mainContent.innerHTML = <div class="bg-white p-6 rounded-lg shadow">Page not found.</div>;
+                }
+            },
+
+            renderMarketIntel: (container, intro) => {
+                container.innerHTML = 
+                    <div class="bg-white p-6 rounded-lg shadow space-y-6">
+                        <p class="text-sm text-slate-600 mb-4">${intro}</p>
+                        <h3 class="text-lg font-semibold text-slate-700">Spot Price Lookup</h3>
+                        <div class="flex space-x-2">
+                            <input type="text" id="spotStockCode" placeholder="Enter Stock Code (e.g., NIFTY)" class="flex-grow p-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500">
+                            <button id="fetchSpotPriceBtn" class="bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700">Fetch Price</button>
+                        </div>
+                        <div id="spotPriceResult" class="mt-2 text-slate-700 font-medium"></div>
+                    </div>
+                ;
+                document.getElementById('fetchSpotPriceBtn').addEventListener('click', async () => {
+                    const stockCode = document.getElementById('spotStockCode').value.toUpperCase();
+                    const resultDiv = document.getElementById('spotPriceResult');
+                    if (!stockCode) {
+                        resultDiv.textContent = 'Please enter a stock code.';
+                        return;
+                    }
+                    resultDiv.textContent = 'Fetching...';
+                    // Simulate API call
+                    await new Promise(resolve => setTimeout(resolve, 500)); 
+                    const spot = MOCK_OPTION_CHAIN[stockCode]?.spot_price || Math.floor(Math.random() * (5000 - 100 + 1)) + 100; // Mock price
+                    app.spotPricesCache[stockCode] = spot;
+                    resultDiv.textContent = ${stockCode} Spot Price: ${utils.formatCurrency(spot)};
+                });
+            },
+
+            loadFnoPositions: async () => {
+                // Simulate fetching and processing F&O positions
+                app.fnoPositionsData = MOCK_FNO_POSITIONS.map(p => {
+                    const lotSize = utils.getLotSize(p.stock_code);
+                    const T_days = utils.businessDaysUntil(CURRENT_EXPIRY);
+                    const iv = utils.impliedVolatility(p.spot_price, p.strike_price, T_days, RISK_FREE_RATE, p.ltp, p.right);
+                    const delta = utils.calculateDelta(p.spot_price, p.strike_price, T_days, RISK_FREE_RATE, iv, p.right);
+                    const probOTM = utils.calculateProbOTM(p.spot_price, p.strike_price, T_days, RISK_FREE_RATE, iv, p.right);
+                    
+                    return {
+                        ...p,
+                        lot_size: lotSize,
+                        pnl: (p.average_price - p.ltp) * p.quantity, // Assuming short positions
+                        distance: Math.abs((p.strike_price - p.spot_price) / p.spot_price),
+                        iv: iv,
+                        delta: Math.abs(delta),
+                        probOTM: probOTM,
+                    };
+                });
+                if (app.currentPage === 'portfolio') app.renderPortfolio(document.getElementById('mainContent'), "View your current F&O positions...");
+                if (app.currentPage === 'pnlChart') app.renderPnlChart(document.getElementById('mainContent'), "Visualize P&L...");
+
+            },
+
+            renderPortfolio: (container, intro) => {
+                let tableHTML = 
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <p class="text-sm text-slate-600 mb-4">${intro}</p>
+                        <h3 class="text-lg font-semibold text-slate-700 mb-4">F&O Positions</h3>
+                        <div class="overflow-x-auto">
+                            <table id="fnoPositionsTable" class="min-w-full divide-y divide-slate-200 table-fixed-layout">
+                                <thead class="bg-slate-100">
+                                    <tr>
+                                        ${app.generateSortableTableHeaders([
+                                            { key: 'stock_code', label: 'Stock' }, { key: 'right', label: 'Type' }, 
+                                            { key: 'strike_price', label: 'Strike' }, { key: 'quantity', label: 'Qty' },
+                                            { key: 'average_price', label: 'Avg. Price' }, { key: 'ltp', label: 'LTP' }, 
+                                            { key: 'spot_price', label: 'Spot' }, { key: 'pnl', label: 'P&L' },
+                                            { key: 'distance', label: 'Dist %' }, { key: 'iv', label: 'IV %' },
+                                            { key: 'delta', label: 'Delta' }, { key: 'probOTM', label: 'Prob. OTM %' }
+                                        ])}
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-slate-200">
+                                    </tbody>
+                            </table>
+                        </div>
+                    </div>;
+                container.innerHTML = tableHTML;
+                app.populateFnoPositionsTable(app.fnoPositionsData);
+            },
+            
+            generateSortableTableHeaders: (headers) => {
+                return headers.map(h => <th scope="col" class="px-3 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider cursor-pointer hover:bg-slate-200" data-sortkey="${h.key}">${h.label} <span class="sort-arrow"></span></th>).join('');
+            },
+
+            populateFnoPositionsTable: (data, sortKey = 'stock_code', sortAsc = true) => {
+                const tbody = document.querySelector("#fnoPositionsTable tbody");
+                if (!tbody) return;
+                tbody.innerHTML = ''; // Clear existing rows
+
+                const sortedData = [...data].sort((a, b) => {
+                    let valA = a[sortKey];
+                    let valB = b[sortKey];
+                    if (typeof valA === 'string') valA = valA.toUpperCase();
+                    if (typeof valB === 'string') valB = valB.toUpperCase();
+                    
+                    if (valA < valB) return sortAsc ? -1 : 1;
+                    if (valA > valB) return sortAsc ? 1 : -1;
+                    return 0;
+                });
+                
+                // Update sort arrows
+                document.querySelectorAll("#fnoPositionsTable thead th").forEach(th => {
+                    const arrowSpan = th.querySelector('.sort-arrow');
+                    if (th.dataset.sortkey === sortKey) {
+                        arrowSpan.textContent = sortAsc ? ' ▲' : ' ▼';
+                    } else {
+                        arrowSpan.textContent = '';
+                    }
+                });
+
+                sortedData.forEach(p => {
+                    const row = tbody.insertRow();
+                    row.innerHTML = 
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${p.stock_code}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs ${p.right === 'Call' ? 'text-green-600' : 'text-red-600'}">${p.right}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(p.strike_price)}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${p.quantity}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(p.average_price)}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(p.ltp)}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(p.spot_price)}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs ${p.pnl >= 0 ? 'text-green-600' : 'text-red-600'}">${utils.formatCurrency(p.pnl)}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(p.distance)}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(p.iv)}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${Number(p.delta).toFixed(2)}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(p.probOTM)}</td>
+                    ;
+                });
+
+                document.querySelectorAll("#fnoPositionsTable thead th").forEach(th => {
+                    th.onclick = () => {
+                        const newSortKey = th.dataset.sortkey;
+                        const newSortAsc = (app.currentSortKey === newSortKey) ? !app.currentSortAsc : true;
+                        app.currentSortKey = newSortKey;
+                        app.currentSortAsc = newSortAsc;
+                        app.populateFnoPositionsTable(data, newSortKey, newSortAsc);
+                    };
+                });
+            },
+            currentSortKey: 'stock_code',
+            currentSortAsc: true,
+            
+            renderOptionChain: (container, intro) => {
+                container.innerHTML = 
+                    <div class="bg-white p-6 rounded-lg shadow space-y-6">
+                        <p class="text-sm text-slate-600 mb-4">${intro}</p>
+                        <h3 class="text-lg font-semibold text-slate-700">Option Chain Viewer</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <input type="text" id="ocStockCode" placeholder="Stock (e.g. NIFTY)" class="p-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500">
+                            <input type="text" id="ocExpiry" value="${CURRENT_EXPIRY.substring(0,10)}" placeholder="YYYY-MM-DD" class="p-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500">
+                            <button id="fetchOptionChainBtn" class="bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700">Fetch Chain</button>
+                        </div>
+                        <div id="optionChainSpotPrice" class="text-md font-medium text-slate-700 mb-2"></div>
+                        <div id="optionChainDisplay" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <h4 class="text-md font-semibold text-green-600 mb-2">CALLS</h4>
+                                <div class="overflow-x-auto"><table id="callsTable" class="min-w-full divide-y divide-slate-200 table-fixed-layout"></table></div>
+                            </div>
+                            <div>
+                                <h4 class="text-md font-semibold text-red-600 mb-2">PUTS</h4>
+                                <div class="overflow-x-auto"><table id="putsTable" class="min-w-full divide-y divide-slate-200 table-fixed-layout"></table></div>
+                            </div>
+                        </div>
+                    </div>
+                ;
+                document.getElementById('fetchOptionChainBtn').addEventListener('click', app.displayOptionChain);
+            },
+
+            displayOptionChain: async () => {
+                const stockCode = document.getElementById('ocStockCode').value.toUpperCase();
+                const expiry = document.getElementById('ocExpiry').value + "T15:30:00.000Z"; // Use selected expiry
+                const spotPriceDiv = document.getElementById('optionChainSpotPrice');
+
+                if (!stockCode) {
+                    spotPriceDiv.textContent = 'Please enter a stock code.';
+                    return;
+                }
+                spotPriceDiv.textContent = 'Fetching option chain...';
+                
+                // Simulate API call
+                await new Promise(resolve => setTimeout(resolve, 500));
+                const chain = MOCK_OPTION_CHAIN[stockCode];
+
+                if (!chain || chain.expiry.substring(0,10) !== expiry.substring(0,10)) { // Check if expiry matches
+                    spotPriceDiv.textContent = No option chain data found for ${stockCode} and expiry ${expiry.substring(0,10)}. Using NIFTY example.;
+                    // Fallback to NIFTY example if specific stock/expiry not found or doesn't match
+                     app.populateOptionTable('callsTable', MOCK_OPTION_CHAIN.NIFTY.calls, MOCK_OPTION_CHAIN.NIFTY.spot_price, expiry, 'Call');
+                     app.populateOptionTable('putsTable', MOCK_OPTION_CHAIN.NIFTY.puts, MOCK_OPTION_CHAIN.NIFTY.spot_price, expiry, 'Put');
+                     spotPriceDiv.innerHTML += <br>Spot Price: ${utils.formatCurrency(MOCK_OPTION_CHAIN.NIFTY.spot_price)};
+                    return;
+                }
+                
+                spotPriceDiv.textContent = Spot Price for ${stockCode}: ${utils.formatCurrency(chain.spot_price)};
+                app.populateOptionTable('callsTable', chain.calls, chain.spot_price, expiry, 'Call');
+                app.populateOptionTable('putsTable', chain.puts, chain.spot_price, expiry, 'Put');
+            },
+
+            populateOptionTable: (tableId, data, spotPrice, expiry, optionType) => {
+                const table = document.getElementById(tableId);
+                if (!table) return;
+                table.innerHTML = 
+                    <thead class="bg-slate-100">
+                        <tr>
+                            <th class="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase">OI</th>
+                            <th class="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase">IV %</th>
+                            <th class="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase">LTP</th>
+                            <th class="px-2 py-2 text-center text-xs font-semibold text-slate-600 uppercase">Strike</th>
+                            <th class="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Delta</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-slate-200">
+                    ${data.map(opt => {
+                        const T_days = utils.businessDaysUntil(expiry);
+                        // Use provided IV if available, else calculate it
+                        const iv = opt.iv !== undefined ? opt.iv : utils.impliedVolatility(spotPrice, opt.strike_price, T_days, RISK_FREE_RATE, opt.ltp, optionType);
+                        // Use provided Delta if available, else calculate it
+                        const delta = opt.delta !== undefined ? opt.delta : utils.calculateDelta(spotPrice, opt.strike_price, T_days, RISK_FREE_RATE, iv, optionType);
+                        const isITM = (optionType === 'Call' && opt.strike_price < spotPrice) || (optionType === 'Put' && opt.strike_price > spotPrice);
+                        return 
+                            <tr class="${isITM ? 'bg-sky-50' : ''}">
+                                <td class="px-2 py-2 whitespace-nowrap text-xs text-slate-600">${opt.open_interest?.toLocaleString() || 'N/A'}</td>
+                                <td class="px-2 py-2 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(iv)}</td>
+                                <td class="px-2 py-2 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(opt.ltp)}</td>
+                                <td class="px-2 py-2 whitespace-nowrap text-xs text-slate-800 font-medium text-center">${utils.formatCurrency(opt.strike_price)}</td>
+                                <td class="px-2 py-2 whitespace-nowrap text-xs text-slate-600">${Number(delta).toFixed(2)}</td>
+                            </tr>
+                        ;
+                    }).join('')}
+                    </tbody>
+                ;
+            },
+            
+            renderSquareOff: (container, intro) => {
+                // Simplified version of "Square Off Lots"
+                container.innerHTML = 
+                    <div class="bg-white p-6 rounded-lg shadow space-y-6">
+                        <p class="text-sm text-slate-600 mb-4">${intro}</p>
+                        <h3 class="text-lg font-semibold text-slate-700 mb-4">Square Off F&O Positions (Lot by Lot)</h3>
+                        <div id="squareOffStockFilter" class="mb-4">
+                            <label for="sqStockSelect" class="block text-sm font-medium text-slate-700 mb-1">Filter by Stock:</label>
+                            <select id="sqStockSelect" class="w-full p-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500">
+                                <option value="">All Stocks</option>
+                                ${[...new Set(app.fnoPositionsData.map(p => p.stock_code))].sort().map(s => <option value="${s}">${s}</option>).join('')}
+                            </select>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table id="squareOffTable" class="min-w-full divide-y divide-slate-200 table-fixed-layout">
+                                <thead class="bg-slate-100">
+                                    <tr>
+                                        <th class="px-3 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase">Stock</th>
+                                        <th class="px-3 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase">Type</th>
+                                        <th class="px-3 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase">Strike</th>
+                                        <th class="px-3 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase">Qty</th>
+                                        <th class="px-3 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase">Avg. Price</th>
+                                        <th class="px-3 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase">LTP</th>
+                                        <th class="px-3 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase">Lots</th>
+                                        <th class="px-3 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-slate-200"></tbody>
+                            </table>
+                        </div>
+                        <div id="squareOffMessage" class="mt-4 text-sm"></div>
+                    </div>
+                ;
+                app.populateSquareOffTable();
+                document.getElementById('sqStockSelect').addEventListener('change', app.populateSquareOffTable);
+            },
+
+            populateSquareOffTable: () => {
+                const tbody = document.querySelector("#squareOffTable tbody");
+                if (!tbody) return;
+                tbody.innerHTML = '';
+                const selectedStock = document.getElementById('sqStockSelect').value;
+                const positionsToDisplay = selectedStock ? app.fnoPositionsData.filter(p => p.stock_code === selectedStock) : app.fnoPositionsData;
+
+                positionsToDisplay.forEach((p, index) => {
+                    const lots = p.quantity / p.lot_size;
+                    const row = tbody.insertRow();
+                    row.innerHTML = 
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${p.stock_code}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs ${p.right === 'Call' ? 'text-green-600' : 'text-red-600'}">${p.right}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(p.strike_price)}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${p.quantity}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(p.average_price)}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(p.ltp)}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${lots.toFixed(0)}</td>
+                        <td class="px-3 py-3 whitespace-nowrap text-xs">
+                            ${lots > 0 ? <button data-index="${app.fnoPositionsData.indexOf(p)}" class="sq-off-one-lot-btn bg-amber-500 text-white px-2 py-1 rounded-md text-xs hover:bg-amber-600">Sq.Off 1 Lot</button> : 'All Squared'}
+                        </td>
+                    ;
+                });
+                document.querySelectorAll('.sq-off-one-lot-btn').forEach(btn => {
+                    btn.addEventListener('click', app.handleSquareOffOneLot);
+                });
+            },
+            
+            handleSquareOffOneLot: async (event) => {
+                const originalIndex = parseInt(event.target.dataset.index);
+                const position = app.fnoPositionsData[originalIndex];
+                const messageDiv = document.getElementById('squareOffMessage');
+                
+                if (!position || position.quantity < position.lot_size) {
+                    messageDiv.textContent = 'Error: Position not found or insufficient quantity.';
+                    messageDiv.className = 'mt-4 text-sm text-red-600';
+                    return;
+                }
+
+                messageDiv.textContent = Simulating square off for 1 lot of ${position.stock_code} ${position.strike_price} ${position.right}...;
+                messageDiv.className = 'mt-4 text-sm text-sky-600';
+
+                // Simulate API Call
+                await new Promise(resolve => setTimeout(resolve, 700));
+                // Mock success
+                const success = Math.random() > 0.1; // 90% success rate for simulation
+
+                if (success) {
+                    position.quantity -= position.lot_size;
+                     messageDiv.textContent = Successfully squared off 1 lot of ${position.stock_code} ${position.strike_price} ${position.right}. Remaining Qty: ${position.quantity};
+                    messageDiv.className = 'mt-4 text-sm text-green-600';
+                } else {
+                    messageDiv.textContent = Failed to square off 1 lot of ${position.stock_code} ${position.strike_price} ${position.right}. (Simulated error);
+                    messageDiv.className = 'mt-4 text-sm text-red-600';
+                }
+                app.populateSquareOffTable(); // Refresh table
+                if (app.currentPage === 'pnlChart') app.renderPnlChart(document.getElementById('mainContent'), "Visualize P&L..."); // Refresh chart
+            },
+
+            renderTradeScanner: (container, intro) => {
+                container.innerHTML = 
+                    <div class="bg-white p-6 rounded-lg shadow space-y-6">
+                        <p class="text-sm text-slate-600 mb-4">${intro}</p>
+                        <h3 class="text-lg font-semibold text-slate-700 mb-4">Option Trade Scanner (Distance & Premium Based)</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label for="tsMinPremium" class="block text-sm font-medium text-slate-700">Min Premium</label>
+                                <input type="number" id="tsMinPremium" value="1000" class="mt-1 w-full p-2 border border-slate-300 rounded-md">
+                            </div>
+                            <div>
+                                <label for="tsMaxPremium" class="block text-sm font-medium text-slate-700">Max Premium</label>
+                                <input type="number" id="tsMaxPremium" value="10000" class="mt-1 w-full p-2 border border-slate-300 rounded-md">
+                            </div>
+                            <div>
+                                <label for="tsMinDistance" class="block text-sm font-medium text-slate-700">Min Distance % (e.g., 0.15 for 15%)</label>
+                                <input type="number" step="0.01" id="tsMinDistance" value="0.15" class="mt-1 w-full p-2 border border-slate-300 rounded-md">
+                            </div>
+                            <div>
+                                <label for="tsMaxDistance" class="block text-sm font-medium text-slate-700">Max Distance % (e.g., 0.5 for 50%)</label>
+                                <input type="number" step="0.01" id="tsMaxDistance" value="0.50" class="mt-1 w-full p-2 border border-slate-300 rounded-md">
+                            </div>
+                        </div>
+                        <button id="runTradeScannerBtn" class="bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700">Scan Options</button>
+                        <div id="tradeScannerResults" class="mt-6 overflow-x-auto"></div>
+                    </div>
+                ;
+                document.getElementById('runTradeScannerBtn').addEventListener('click', app.runTradeScanner);
+            },
+
+            runTradeScanner: async () => {
+                const minPremium = parseFloat(document.getElementById('tsMinPremium').value);
+                const maxPremium = parseFloat(document.getElementById('tsMaxPremium').value);
+                const minDistance = parseFloat(document.getElementById('tsMinDistance').value); // As decimal
+                const maxDistance = parseFloat(document.getElementById('tsMaxDistance').value); // As decimal
+                const resultsDiv = document.getElementById('tradeScannerResults');
+                resultsDiv.innerHTML = '<p class="text-slate-600">Scanning...</p>';
+
+                // Simulate fetching all options and filtering
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                let scannedOptions = [];
+                const T_days = utils.businessDaysUntil(CURRENT_EXPIRY);
+
+                for (const stockCode in MOCK_OPTION_CHAIN) {
+                    const chain = MOCK_OPTION_CHAIN[stockCode];
+                    const options = [...chain.calls, ...chain.puts];
+                    options.forEach(opt => {
+                        const lotSize = utils.getLotSize(stockCode);
+                        const premium = opt.ltp * lotSize;
+                        const distance = Math.abs((opt.strike_price - chain.spot_price) / chain.spot_price);
+                        const iv = opt.iv !== undefined ? opt.iv : utils.impliedVolatility(chain.spot_price, opt.strike_price, T_days, RISK_FREE_RATE, opt.ltp, opt.strike_price > chain.spot_price ? 'Call' : 'Put'); // Simplified type
+                        const probOTM = utils.calculateProbOTM(chain.spot_price, opt.strike_price, T_days, RISK_FREE_RATE, iv, opt.strike_price > chain.spot_price ? 'Call' : 'Put');
+
+                        if (premium >= minPremium && premium <= maxPremium && distance >= minDistance && distance <= maxDistance) {
+                            scannedOptions.push({
+                                stock_code: stockCode,
+                                right: opt.strike_price > chain.spot_price ? 'Call' : 'Put', // Simplified
+                                strike_price: opt.strike_price,
+                                ltp: opt.ltp,
+                                spot_price: chain.spot_price,
+                                premium: premium,
+                                distance: distance,
+                                iv: iv,
+                                probOTM: probOTM,
+                                lot_size: lotSize
+                            });
+                        }
+                    });
+                }
+                
+                if (scannedOptions.length === 0) {
+                    resultsDiv.innerHTML = '<p class="text-slate-600">No options found matching your criteria.</p>';
+                    return;
+                }
+
+                resultsDiv.innerHTML = 
+                    <h4 class="text-md font-semibold text-slate-700 mb-2">Scan Results (${scannedOptions.length} found)</h4>
+                    <table class="min-w-full divide-y divide-slate-200 table-fixed-layout">
+                        <thead class="bg-slate-100">
+                            <tr>
+                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Stock</th>
+                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Type</th>
+                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Strike</th>
+                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">LTP</th>
+                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Premium</th>
+                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Dist %</th>
+                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">IV %</th>
+                                <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Prob. OTM %</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-slate-200">
+                        ${scannedOptions.map(opt => 
+                            <tr>
+                                <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${opt.stock_code}</td>
+                                <td class="px-3 py-3 whitespace-nowrap text-xs ${opt.right === 'Call' ? 'text-green-600' : 'text-red-600'}">${opt.right}</td>
+                                <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(opt.strike_price)}</td>
+                                <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(opt.ltp)}</td>
+                                <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(opt.premium)}</td>
+                                <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(opt.distance)}</td>
+                                <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(opt.iv)}</td>
+                                <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatPercentage(opt.probOTM)}</td>
+                            </tr>
+                        ).join('')}
+                        </tbody>
+                    </table>
+                ;
+            },
+            
+            renderPnlChart: (container, intro) => {
+                 container.innerHTML = 
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <p class="text-sm text-slate-600 mb-4">${intro}</p>
+                        <h3 class="text-lg font-semibold text-slate-700 mb-4">F&O Positions P&L Distribution</h3>
+                        <div class="chart-container">
+                            <canvas id="pnlDistributionChart"></canvas>
+                        </div>
+                    </div>;
+
+                if (app.pnlChartInstance) {
+                    app.pnlChartInstance.destroy();
+                }
+                
+                const ctx = document.getElementById('pnlDistributionChart').getContext('2d');
+                const pnlData = app.fnoPositionsData.map(p => p.pnl);
+                const labels = app.fnoPositionsData.map(p => ${p.stock_code} ${p.strike_price}${p.right[0]});
+
+                app.pnlChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Profit/Loss (₹)',
+                            data: pnlData,
+                            backgroundColor: pnlData.map(pnl => pnl >= 0 ? 'rgba(34, 197, 94, 0.6)' : 'rgba(239, 68, 68, 0.6)'), // green-500, red-500
+                            borderColor: pnlData.map(pnl => pnl >= 0 ? 'rgba(22, 163, 74, 1)' : 'rgba(220, 38, 38, 1)'), // green-600, red-600
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { color: '#475569' }, // slate-600
+                                grid: { color: '#e2e8f0' } // slate-200
+                            },
+                            x: {
+                                ticks: { 
+                                    color: '#475569', // slate-600
+                                    autoSkip: false,
+                                    maxRotation: 45,
+                                    minRotation: 45,
+                                     callback: function(value, index, values) { // Label wrapping logic
+                                        const label = this.getLabelForValue(value);
+                                        if (label.length > 16) {
+                                            return label.substring(0, 15) + '...';
+                                        }
+                                        return label;
+                                    }
+                                },
+                                grid: { display: false }
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                enabled: true,
+                                mode: 'index',
+                                intersect: false,
+                                backgroundColor: 'rgba(15, 23, 42, 0.8)', // slate-900
+                                titleFont: { size: 14, weight: 'bold' },
+                                bodyFont: { size: 12 },
+                                callbacks: {
+                                    label: function(context) {
+                                        return P&L: ${utils.formatCurrency(context.raw)};
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            },
+
+            renderSettings: (container, intro) => {
+                const expiries = [ // Sample expiries
+                    "2025-05-29T15:30:00.000Z", "2025-06-27T15:30:00.000Z", "2025-07-25T15:30:00.000Z"
+                ];
+                container.innerHTML = 
+                    <div class="bg-white p-6 rounded-lg shadow space-y-6">
+                        <p class="text-sm text-slate-600 mb-4">${intro}</p>
+                        <h3 class="text-lg font-semibold text-slate-700">Global Settings</h3>
+                        <div>
+                            <label for="expirySelect" class="block text-sm font-medium text-slate-700">Select Active Expiry Date:</label>
+                            <select id="expirySelect" class="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm">
+                                ${expiries.map(exp => <option value="${exp}" ${exp === CURRENT_EXPIRY ? 'selected' : ''}>${exp.substring(0,10)}</option>).join('')}
+                            </select>
+                        </div>
+                        <button id="saveSettingsBtn" class="bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700">Save Settings</button>
+                        <div id="settingsMessage" class="mt-2 text-sm"></div>
+                    </div>
+                ;
+                document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+                    CURRENT_EXPIRY = document.getElementById('expirySelect').value;
+                    const msgDiv = document.getElementById('settingsMessage');
+                    msgDiv.textContent = 'Settings saved. Active expiry updated.';
+                    msgDiv.className = 'mt-2 text-sm text-green-600';
+                    // Potentially re-fetch or re-render data that depends on expiry
+                    app.loadFnoPositions(); // Example: reload F&O positions
+                    if(app.currentPage === 'optionChain') app.displayOptionChain(); // Refresh option chain if visible
+                });
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', app.init);
+    </script>
+</body>
+</html>
