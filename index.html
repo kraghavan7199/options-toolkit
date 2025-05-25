@@ -610,7 +610,7 @@
                         <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${utils.formatCurrency(p.ltp)}</td>
                         <td class="px-3 py-3 whitespace-nowrap text-xs text-slate-600">${lots.toFixed(0)}</td>
                         <td class="px-3 py-3 whitespace-nowrap text-xs">
-                            ${lots > 0 ? <button data-index="${app.fnoPositionsData.indexOf(p)}" class="sq-off-one-lot-btn bg-amber-500 text-white px-2 py-1 rounded-md text-xs hover:bg-amber-600">Sq.Off 1 Lot</button> : 'All Squared'}
+                            ${lots > 0 ? `<button data-index="${app.fnoPositionsData.indexOf(p)}" class="sq-off-one-lot-btn bg-amber-500 text-white px-2 py-1 rounded-md text-xs hover:bg-amber-600">Sq.Off 1 Lot</button>` : 'All Squared'}
                         </td>`
                     ;
                 });
