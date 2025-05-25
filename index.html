@@ -404,7 +404,7 @@
             },
             
             generateSortableTableHeaders: (headers) => {
-                return headers.map(h => <th scope="col" class="px-3 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider cursor-pointer hover:bg-slate-200" data-sortkey="${h.key}">${h.label} <span class="sort-arrow"></span></th>).join('');
+                return headers.map(h => `<th scope="col" class="px-3 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider cursor-pointer hover:bg-slate-200" data-sortkey="${h.key}">${h.label} <span class="sort-arrow"></span></th>`).join('');
             },
 
             populateFnoPositionsTable: (data, sortKey = 'stock_code', sortAsc = true) => {
